@@ -4124,6 +4124,7 @@ subroutine evolve_icebergs(bergs)
   integer :: stderrunit
   logical :: bounced, interactive_icebergs_on, Runge_not_Verlet
   type(randomNumberStream) :: rns ! Random numbers for stochastic tidal parameterization
+  integer ::  omp_get_num_threads,omp_get_thread_num
   ! Get the stderr unit number
   stderrunit = stderr()
 
@@ -4142,7 +4143,13 @@ subroutine evolve_icebergs(bergs)
       rns = initializeRandomNumberStream( grdi + 10000*grdj + &
                                           int( 16384.*abs( sin(262144.*grd%ssh(grdi,grdj)) ) ) )
     endif
+!$OMP PARALLEL  FIRSTPRIVATE(berg) &
+!$OMP           shared(grd,grdi,grdj,bergs,stderrunit,debug,Runge_not_Verlet,interactive_icebergs_on,rns) &
+!$OMP           private(axn, ayn, bxn, byn, uveln, vveln,lonn, latn, i, j, xi, yj,rx,ry) & 
+!$OMP           default(none)
+!$OMP SINGLE    
     do while (associated(berg)) ! loop over all bergs
+!$OMP TASK      FIRSTPRIVATE(berg)  
       if (berg%static_berg .lt. 0.5) then  !Only allow non-static icebergs to evolve
 
         !Checking it everything is ok:
@@ -4205,8 +4212,11 @@ subroutine evolve_icebergs(bergs)
         !if (debug) call print_berg(stderr(), berg, 'evolve_iceberg, final posn.')
         if (debug) call check_position(grd, berg, 'evolve_iceberg (bot)')
       endif
+!$OMP END TASK
       berg=>berg%next
     enddo ! loop over all bergs
+!$OMP END SINGLE
+!$OMP END PARALLEL
   enddo ; enddo
 
   ! When we are using interactive icebergs, we update the (old) iceberg positions and velocities in a second loop, all together (to make code order invarient)
