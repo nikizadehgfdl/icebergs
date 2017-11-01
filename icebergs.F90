@@ -4147,9 +4147,13 @@ subroutine evolve_icebergs(bergs)
 !$OMP           shared(grd,grdi,grdj,bergs,stderrunit,debug,Runge_not_Verlet,interactive_icebergs_on,rns) &
 !$OMP           private(axn, ayn, bxn, byn, uveln, vveln,lonn, latn, i, j, xi, yj,rx,ry) & 
 !$OMP           default(none)
-!$OMP SINGLE    
+!$OMP SINGLE FIRSTPRIVATE(berg)   
     do while (associated(berg)) ! loop over all bergs
-!$OMP TASK      FIRSTPRIVATE(berg)  
+!$OMP TASK      FIRSTPRIVATE(berg)  &
+!$OMP           shared(grd,grdi,grdj,bergs,stderrunit,debug,Runge_not_Verlet,interactive_icebergs_on,rns) &
+!$OMP           private(axn, ayn, bxn, byn, uveln, vveln,lonn, latn, i, j, xi, yj,rx,ry) & 
+!$OMP           default(none)
+
       if (berg%static_berg .lt. 0.5) then  !Only allow non-static icebergs to evolve
 
         !Checking it everything is ok:
@@ -4217,6 +4221,7 @@ subroutine evolve_icebergs(bergs)
     enddo ! loop over all bergs
 !$OMP END SINGLE
 !$OMP END PARALLEL
+
   enddo ; enddo
 
   ! When we are using interactive icebergs, we update the (old) iceberg positions and velocities in a second loop, all together (to make code order invarient)
