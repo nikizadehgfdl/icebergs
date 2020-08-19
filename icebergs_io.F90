@@ -9,7 +9,9 @@ use mpp_domains_mod, only: mpp_get_tile_pelist,mpp_get_tile_npes,mpp_get_io_doma
 
 use mpp_mod, only: mpp_npes, mpp_pe, mpp_root_pe, mpp_sum, mpp_min, mpp_max, NULL_PE
 use mpp_mod, only: mpp_send, mpp_recv, mpp_gather, mpp_chksum
-use mpp_mod, only: COMM_TAG_11, COMM_TAG_12, COMM_TAG_13, COMM_TAG_14
+!These tags are used in other components (e.g., land_lad2) and are not going to be unique.
+!Set these to some random integers instead.
+!use mpp_mod, only: COMM_TAG_11, COMM_TAG_12, COMM_TAG_13, COMM_TAG_14
 
 use fms_mod, only: stdlog, stderr, error_mesg, FATAL, WARNING, NOTE
 use fms_mod, only: field_exist, file_exist, read_data, write_data
@@ -53,6 +55,7 @@ public read_ocean_depth
 !Local Vars
 integer, parameter :: file_format_major_version=0
 integer, parameter :: file_format_minor_version=1
+integer, parameter :: COMM_TAG_11=111, COMM_TAG_12=112, COMM_TAG_13=113, COMM_TAG_14=114
 !I/O vars
 type(domain2d), pointer, save :: io_domain=>NULL()
 integer, save :: io_tile_id(1), io_tile_root_pe, io_npes
@@ -94,6 +97,12 @@ integer :: stdlogunit, stderrunit
      call mpp_get_tile_pelist(io_domain,io_tile_pelist)
      io_npes = io_layout(1)*io_layout(2)
   endif
+  !After some gaea updates, some models started to crash because huge numbers where being received
+  !by io-tile root pes (which would try to allocate huge arrays).
+  !The following subroutine call flushes these junk numbers from the mpp buffers to avoid such crashes.
+  !It remains to find out how these bad numbers arise.
+  !For details see https://github.com/NOAA-GFDL/icebergs/issues/61
+  call mpp_cough(io_tile_pelist,io_tile_root_pe,is_io_tile_root_pe)
 
   clock_trw=mpp_clock_id( 'Icebergs-traj write', flags=clock_flag_default, grain=CLOCK_SUBCOMPONENT )
   clock_trp=mpp_clock_id( 'Icebergs-traj prepare', flags=clock_flag_default, grain=CLOCK_SUBCOMPONENT )
@@ -1282,7 +1291,6 @@ logical :: io_is_in_append_mode
   endif
 
   if(.NOT. force_all_pes_traj ) then
-
   !Now gather and append the bergs from all pes in the io_tile to the list on corresponding io_tile_root_pe
   ntrajs_sent_io =0
   ntrajs_rcvd_io =0
@@ -1293,11 +1301,18 @@ logical :: io_is_in_append_mode
         from_pe=io_tile_pelist(np)
         call mpp_recv(ntrajs_rcvd_io, glen=1, from_pe=from_pe, tag=COMM_TAG_11)
         if (ntrajs_rcvd_io .gt. 0) then
+          !Safety check, io-root-pe used to get huge numbers that would crash the model
+          !              when trying to allocate huge arrays.
+          !if (ntrajs_rcvd_io .gt. 10000000) then
+          ! write(stderrunit,*) 'WARNING write_trajectory got junk number',ntrajs_rcvd_io,from_pe,mpp_pe()
+          ! call error_mesg('diamonds ', 'write_trajectory got junk number!', FATAL)
+          !else
            call increase_ibuffer(ibuffer_io, ntrajs_rcvd_io,buffer_width_traj)
            call mpp_recv(ibuffer_io%data, ntrajs_rcvd_io*buffer_width_traj,from_pe=from_pe, tag=COMM_TAG_12)
            do i=1, ntrajs_rcvd_io
               call unpack_traj_from_buffer2(traj4io, ibuffer_io, i, save_short_traj)
            enddo
+          !endif
        endif
      enddo
   else
@@ -1757,5 +1772,25 @@ logical function find_restart_file(filename, actual_file, multiPErestart, tile_i
   multiPErestart=.false.
 
 end function find_restart_file
+
+subroutine mpp_cough(io_tile_pelist,io_tile_root_pe,is_io_tile_root_pe)
+  integer, dimension(:), intent(in) :: io_tile_pelist
+  integer,               intent(in) :: io_tile_root_pe
+  logical,               intent(in) :: is_io_tile_root_pe
+  integer nsent,nrcvd,np,from_pe
+  nsent =0
+  nrcvd =0
+  if(is_io_tile_root_pe) then
+     do np=2,size(io_tile_pelist) ! Note: np starts from 2 to exclude self
+        from_pe=io_tile_pelist(np)
+        call mpp_recv(nrcvd, glen=1, from_pe=from_pe, tag=COMM_TAG_11)
+        if (nrcvd .ne. 0) then
+           print*,'mpp_cough warning: pe ',mpp_pe(), ' got ',nrcvd, ' from pe ',from_pe
+       endif
+     enddo
+  else
+     call mpp_send(nsent, plen=1, to_pe=io_tile_root_pe, tag=COMM_TAG_11)
+  endif
+end subroutine mpp_cough
 
 end module

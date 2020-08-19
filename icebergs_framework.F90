@@ -9,15 +9,17 @@ use mpp_domains_mod, only: domain2D
 
 use mpp_mod, only: mpp_npes, mpp_pe, mpp_root_pe, mpp_sum, mpp_min, mpp_max, NULL_PE
 use mpp_mod, only: mpp_send, mpp_recv, mpp_sync_self, mpp_pe, mpp_root_pe, mpp_chksum
-use mpp_mod, only: COMM_TAG_1, COMM_TAG_2, COMM_TAG_3, COMM_TAG_4
-use mpp_mod, only: COMM_TAG_5, COMM_TAG_6, COMM_TAG_7, COMM_TAG_8
-use mpp_mod, only: COMM_TAG_9, COMM_TAG_10
+!use mpp_mod, only: COMM_TAG_1, COMM_TAG_2, COMM_TAG_3, COMM_TAG_4
+!use mpp_mod, only: COMM_TAG_5, COMM_TAG_6, COMM_TAG_7, COMM_TAG_8
+!use mpp_mod, only: COMM_TAG_9, COMM_TAG_10
 use fms_mod, only: stdlog, stderr, error_mesg, FATAL, WARNING
 
 use time_manager_mod, only: time_type, get_date, get_time, set_date, operator(-)
 
 implicit none ; private
 
+integer, parameter :: COMM_TAG_1=101, COMM_TAG_2=102, COMM_TAG_3=103, COMM_TAG_4=104, COMM_TAG_5=105
+integer, parameter :: COMM_TAG_6=106, COMM_TAG_7=107, COMM_TAG_8=108, COMM_TAG_9=109, COMM_TAG_10=110
 integer :: buffer_width=28 ! This should be a parameter
 integer :: buffer_width_traj=32 ! This should be a parameter
 integer, parameter :: nclasses=10 ! Number of ice bergs classes
